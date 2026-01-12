@@ -21,7 +21,7 @@ func main() {
 	client := utils.AutoHttpClient
 	mode := 0
 	var showVersion, help, showIP, useBar, cache, jsonOutput bool
-	var Iface, DnsServers, httpProxy, socksProxy, language, flagString string
+	var Iface, DnsServers, httpProxy, socksProxy, language, flagString, postURL string
 	var conc uint64
 	utFlag := flag.NewFlagSet("ut", flag.ContinueOnError)
 	utFlag.BoolVar(&help, "h", false, "show help information")
@@ -38,6 +38,7 @@ func main() {
 	utFlag.Uint64Var(&conc, "conc", 0, "max concurrent tests (0=unlimited); example: -conc 50")
 	utFlag.BoolVar(&cache, "cache", false, "enable caching and sequential region execution; example: -cache")
 	utFlag.BoolVar(&jsonOutput, "json", false, "output results in JSON format; example: -json")
+	utFlag.StringVar(&postURL, "url", "", "POST IP info and test results to specified URL; example: -url https://example.com/api")
 	utFlag.StringVar(&language, "L", "zh", "language; specify 'en' for English or 'zh' for Chinese")
 	utFlag.Parse(os.Args[1:])
 	if help {
@@ -86,14 +87,35 @@ func main() {
 		if !readStatus {
 			return
 		}
+
+		var ipv4Results, ipv6Results string
+		resultsMap := map[string]string{}
 		if executor.IPV4 {
-			fmt.Print(executor.RunTests(client, "ipv4", language, useBar))
+			ipv4Results = executor.RunTests(client, "ipv4", language, useBar)
+			resultsMap["ipv4"] = ipv4Results
 		}
 		if executor.IPV6 {
 			if mode == 6 {
-				fmt.Print(executor.RunTests(client, "ipv6", language, useBar))
+				ipv6Results = executor.RunTests(client, "ipv6", language, useBar)
 			} else {
-				fmt.Print(executor.RunTests(utils.Ipv6HttpClient, "ipv6", language, useBar))
+				ipv6Results = executor.RunTests(utils.Ipv6HttpClient, "ipv6", language, useBar)
+			}
+			resultsMap["ipv6"] = ipv6Results
+		}
+
+		combined, err := executor.BuildCombinedJSON(executor.GetIpv4InfoRawJSON(), resultsMap)
+		if err != nil {
+			errorJSON := fmt.Sprintf(`{"error": "Failed to build json: %v"}`, err)
+			fmt.Fprintln(os.Stderr, errorJSON)
+			return
+		}
+		fmt.Println(string(combined))
+
+		if postURL != "" {
+			err := executor.PostCombinedJSONToURL(postURL, executor.GetIpv4InfoRawJSON(), resultsMap)
+			if err != nil {
+				errorJSON := fmt.Sprintf(`{"error": "Failed to post results: %v"}`, err)
+				fmt.Fprintln(os.Stderr, errorJSON)
 			}
 		}
 	} else {
@@ -127,8 +149,5 @@ func main() {
 			}
 		}
 	}
-	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-		fmt.Println("Press Enter to exit...")
-		fmt.Scanln()
-	}
+	_ = runtime.GOOS
 }

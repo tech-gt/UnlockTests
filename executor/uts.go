@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -1072,10 +1073,115 @@ func maskIP(ip string) string {
 	return ip // fallback
 }
 
+// IPInfo 结构体用于存储从 ipinfo.io 获取的 IP 信息
+type IPInfo struct {
+	IP       string `json:"ip"`
+	Hostname string `json:"hostname"`
+	City     string `json:"city"`
+	Region   string `json:"region"`
+	Country  string `json:"country"`
+	Loc      string `json:"loc"`
+	Org      string `json:"org"`
+	Postal   string `json:"postal"`
+	Timezone string `json:"timezone"`
+	Readme   string `json:"readme"`
+}
+
+// 全局变量存储 IP 信息
+var GlobalIPInfo IPInfo
+
+var globalIpv4InfoRaw json.RawMessage
+
+// PostData 结构体用于存储要 POST 的数据
+type PostData struct {
+	IPInfo     IPInfo         `json:"ip_info"`
+	TestResults []*model.Result `json:"test_results"`
+	Timestamp  string         `json:"timestamp"`
+}
+
+// GetResults 返回当前所有测试结果
+func GetIpv4InfoRawJSON() json.RawMessage {
+	if len(globalIpv4InfoRaw) == 0 {
+		return nil
+	}
+	cpy := make([]byte, len(globalIpv4InfoRaw))
+	copy(cpy, globalIpv4InfoRaw)
+	return json.RawMessage(cpy)
+}
+
+func BuildCombinedJSON(ipinfo json.RawMessage, resultsJSON map[string]string) ([]byte, error) {
+	resultObjs := map[string]json.RawMessage{}
+	for k, v := range resultsJSON {
+		vv := strings.TrimSpace(v)
+		if vv == "" {
+			continue
+		}
+		resultObjs[k] = json.RawMessage([]byte(vv))
+	}
+
+	type payload struct {
+		IPInfo    json.RawMessage            `json:"ip_info"`
+		Results   map[string]json.RawMessage `json:"results"`
+		Timestamp string                     `json:"timestamp"`
+	}
+
+	postData := payload{
+		IPInfo:    ipinfo,
+		Results:   resultObjs,
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	jsonData, err := json.Marshal(postData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal post data: %v", err)
+	}
+	return jsonData, nil
+}
+
+func PostCombinedJSONToURL(url string, ipinfo json.RawMessage, resultsJSON map[string]string) error {
+	if url == "" {
+		return nil // 如果 URL 为空，则不发送
+	}
+
+	jsonData, err := BuildCombinedJSON(ipinfo, resultsJSON)
+	if err != nil {
+		return err
+	}
+	
+	// 创建 HTTP 客户端
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	
+	// 创建请求
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+	
+	// 设置请求头
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "UnlockTests/1.0")
+	
+	// 发送请求
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+	
+	// 检查响应状态码
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("server returned status code: %d", resp.StatusCode)
+	}
+	
+	return nil
+}
+
 func GetIpv4Info(showIP bool) {
 	client := utils.Req(utils.Ipv4HttpClient)
-	client.SetTimeout(5 * time.Second)
-	resp, err := client.R().Get("https://www.cloudflare.com/cdn-cgi/trace")
+	client.SetTimeout(10 * time.Second)
+	resp, err := client.R().Get("https://ipinfo.io/json")
 	if err != nil {
 		IPV4 = false
 		if showIP {
@@ -1092,15 +1198,22 @@ func GetIpv4Info(showIP bool) {
 		}
 		return
 	}
-	body := string(b)
-	if showIP && body != "" && strings.Contains(body, "ip=") {
-		s := body
-		i := strings.Index(s, "ip=")
-		s = s[i+3:]
-		i = strings.Index(s, "\n")
-		ip := s[:i]
-		maskedIP := maskIP(ip)
+
+	globalIpv4InfoRaw = json.RawMessage(b)
+
+	err = json.Unmarshal(b, &GlobalIPInfo)
+	if err != nil {
+		if showIP {
+			fmt.Println("Failed to parse IP info")
+		}
+		return
+	}
+	
+	if showIP && GlobalIPInfo.IP != "" {
+		maskedIP := maskIP(GlobalIPInfo.IP)
 		fmt.Println("Your IPV4 address:", Blue(maskedIP))
+		fmt.Println("Location:", Blue(fmt.Sprintf("%s, %s, %s", GlobalIPInfo.City, GlobalIPInfo.Region, GlobalIPInfo.Country)))
+		fmt.Println("ISP:", Blue(GlobalIPInfo.Org))
 	}
 }
 
