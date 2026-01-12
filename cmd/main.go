@@ -20,7 +20,7 @@ func main() {
 	}()
 	client := utils.AutoHttpClient
 	mode := 0
-	var showVersion, help, showIP, useBar, cache bool
+	var showVersion, help, showIP, useBar, cache, jsonOutput bool
 	var Iface, DnsServers, httpProxy, socksProxy, language, flagString string
 	var conc uint64
 	utFlag := flag.NewFlagSet("ut", flag.ContinueOnError)
@@ -37,6 +37,7 @@ func main() {
 	utFlag.StringVar(&socksProxy, "socks-proxy", "", "specify SOCKS5 proxy; example: -socks-proxy \"socks5://username:password@127.0.0.1:1080\"")
 	utFlag.Uint64Var(&conc, "conc", 0, "max concurrent tests (0=unlimited); example: -conc 50")
 	utFlag.BoolVar(&cache, "cache", false, "enable caching and sequential region execution; example: -cache")
+	utFlag.BoolVar(&jsonOutput, "json", false, "output results in JSON format; example: -json")
 	utFlag.StringVar(&language, "L", "zh", "language; specify 'en' for English or 'zh' for Chinese")
 	utFlag.Parse(os.Args[1:])
 	if help {
@@ -66,6 +67,9 @@ func main() {
 	if cache {
 		executor.EnableCache()
 	}
+	if jsonOutput {
+		executor.EnableJSONOutput()
+	}
 	if mode == 4 {
 		client = utils.Ipv4HttpClient
 		executor.IPV6 = false
@@ -74,32 +78,53 @@ func main() {
 		client = utils.Ipv6HttpClient
 		executor.IPV4 = false
 	}
-	if language == "zh" {
-		fmt.Println("项目地址: " + Blue("https://github.com/oneclickvirt/UnlockTests"))
+	if jsonOutput {
+		// JSON 模式下，只输出 JSON，不输出其他信息
+		executor.GetIpv4Info(false)
+		executor.GetIpv6Info(false)
+		readStatus := executor.ReadSelect(language, flagString)
+		if !readStatus {
+			return
+		}
+		if executor.IPV4 {
+			fmt.Print(executor.RunTests(client, "ipv4", language, useBar))
+		}
+		if executor.IPV6 {
+			if mode == 6 {
+				fmt.Print(executor.RunTests(client, "ipv6", language, useBar))
+			} else {
+				fmt.Print(executor.RunTests(utils.Ipv6HttpClient, "ipv6", language, useBar))
+			}
+		}
 	} else {
-		fmt.Println("Github Repo: " + Blue("https://github.com/oneclickvirt/UnlockTests"))
-	}
-	executor.GetIpv4Info(showIP)
-	executor.GetIpv6Info(showIP)
-	readStatus := executor.ReadSelect(language, flagString)
-	if !readStatus {
-		return
-	}
-	if language == "zh" {
-		fmt.Println("测试时间: ", Yellow(time.Now().Format("2006-01-02 15:04:05")))
-	} else {
-		fmt.Println("Test time: ", Yellow(time.Now().Format("2006-01-02 15:04:05")))
-	}
-	if executor.IPV4 {
-		fmt.Println(Blue("IPV4:"))
-		fmt.Print(executor.RunTests(client, "ipv4", language, useBar))
-	}
-	if executor.IPV6 {
-		fmt.Println(Blue("IPV6:"))
-		if mode == 6 {
-			fmt.Print(executor.RunTests(client, "ipv6", language, useBar))
+		// 普通模式下，输出所有信息
+		if language == "zh" {
+			fmt.Println("项目地址: " + Blue("https://github.com/oneclickvirt/UnlockTests"))
 		} else {
-			fmt.Print(executor.RunTests(utils.Ipv6HttpClient, "ipv6", language, useBar))
+			fmt.Println("Github Repo: " + Blue("https://github.com/oneclickvirt/UnlockTests"))
+		}
+		executor.GetIpv4Info(showIP)
+		executor.GetIpv6Info(showIP)
+		readStatus := executor.ReadSelect(language, flagString)
+		if !readStatus {
+			return
+		}
+		if language == "zh" {
+			fmt.Println("测试时间: ", Yellow(time.Now().Format("2006-01-02 15:04:05")))
+		} else {
+			fmt.Println("Test time: ", Yellow(time.Now().Format("2006-01-02 15:04:05")))
+		}
+		if executor.IPV4 {
+			fmt.Println(Blue("IPV4:"))
+			fmt.Print(executor.RunTests(client, "ipv4", language, useBar))
+		}
+		if executor.IPV6 {
+			fmt.Println(Blue("IPV6:"))
+			if mode == 6 {
+				fmt.Print(executor.RunTests(client, "ipv6", language, useBar))
+			} else {
+				fmt.Print(executor.RunTests(utils.Ipv6HttpClient, "ipv6", language, useBar))
+			}
 		}
 	}
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {

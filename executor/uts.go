@@ -1,8 +1,8 @@
 package executor
 
 import (
-	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -59,6 +59,7 @@ var (
 	resultCache                                     = make(map[string]model.Result)
 	currentIPVersion                                string // 用于区分 IPv4/IPv6 的缓存
 	cacheMutex                                      sync.RWMutex
+	jsonOutput                                      = false // 是否输出 JSON 格式
 )
 
 func NewBar(count int64) *pb.ProgressBar {
@@ -662,6 +663,11 @@ func IPV6Multination() [](func(c *http.Client) model.Result) {
 }
 
 func finallyPrintResult(language, netType string) string {
+	// 如果启用 JSON 输出，返回 JSON 格式
+	if jsonOutput {
+		return formatJSONResult(netType)
+	}
+
 	var result string
 	getPlatformName := func(multi bool, TW, HK, JP, KR, NA, SA, EU, AFR, OCEA, SPORT bool) string {
 		if multi {
@@ -759,6 +765,68 @@ func finallyPrintResult(language, netType string) string {
 	return result
 }
 
+// formatJSONResult 格式化结果为 JSON
+func formatJSONResult(netType string) string {
+	type ResultItem struct {
+		Name       string `json:"name"`
+		Status     string `json:"status"`
+		Region     string `json:"region,omitempty"`
+		Info       string `json:"info,omitempty"`
+		UnlockType string `json:"unlock_type,omitempty"`
+	}
+
+	type JSONOutput struct {
+		IPVersion string       `json:"ip_version"`
+		Results   []ResultItem `json:"results"`
+	}
+
+	// 构建结果映射
+	resultMap := make(map[string]*model.Result)
+	for _, r := range R {
+		resultMap[r.Name] = r
+	}
+
+	// 按 Names 顺序构建结果列表
+	var results []ResultItem
+	for _, name := range Names {
+		if r, found := resultMap[name]; found {
+			// 跳过 PrintHead 类型的结果
+			if r.Status == model.PrintHead {
+				continue
+			}
+			
+			item := ResultItem{
+				Name:   r.Name,
+				Status: r.Status,
+			}
+			
+			if r.Region != "" {
+				item.Region = strings.ToUpper(r.Region)
+			}
+			if r.Info != "" {
+				item.Info = r.Info
+			}
+			if r.UnlockType != "" {
+				item.UnlockType = r.UnlockType
+			}
+			
+			results = append(results, item)
+		}
+	}
+
+	output := JSONOutput{
+		IPVersion: strings.ToUpper(netType),
+		Results:    results,
+	}
+
+	jsonBytes, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return fmt.Sprintf(`{"error": "Failed to marshal JSON: %v"}`, err)
+	}
+
+	return string(jsonBytes) + "\n"
+}
+
 func SwitchOptions(c string) {
 	switch c {
 	case "0":
@@ -819,64 +887,8 @@ func SwitchOptions(c string) {
 
 func ReadSelect(language, flagString string) bool {
 	if flagString == "" {
-		if language == "zh" {
-			fmt.Println("请选择检测项目: ")
-			fmt.Println("[0]: 跨国平台")
-			fmt.Println("[1]: 跨国平台 + 台湾平台")
-			fmt.Println("[2]: 跨国平台 + 香港平台")
-			fmt.Println("[3]: 跨国平台 + 日本平台")
-			fmt.Println("[4]: 跨国平台 + 韩国平台")
-			fmt.Println("[5]: 跨国平台 + 北美平台")
-			fmt.Println("[6]: 跨国平台 + 南美平台")
-			fmt.Println("[7]: 跨国平台 + 欧洲平台")
-			fmt.Println("[8]: 跨国平台 + 非洲平台")
-			fmt.Println("[9]: 跨国平台 + 大洋洲平台")
-			fmt.Println("[10]: 仅台湾平台")
-			fmt.Println("[11]: 仅香港平台")
-			fmt.Println("[12]: 仅日本平台")
-			fmt.Println("[13]: 仅韩国平台")
-			fmt.Println("[14]: 仅北美平台")
-			fmt.Println("[15]: 仅南美平台")
-			fmt.Println("[16]: 仅欧洲平台")
-			fmt.Println("[17]: 仅非洲平台")
-			fmt.Println("[18]: 仅大洋洲平台")
-			fmt.Println("[19]: 仅体育平台")
-			fmt.Println("[20]: 全部平台")
-			fmt.Print("请输入对应数字,空格分隔(回车确认): ")
-		} else {
-			fmt.Println("Please select detection items:")
-			fmt.Println("[0]: International platform")
-			fmt.Println("[1]: International platform + Taiwan platform")
-			fmt.Println("[2]: International platform + Hong Kong platform")
-			fmt.Println("[3]: International platform + Japan platform")
-			fmt.Println("[4]: International platform + Korea platform")
-			fmt.Println("[5]: International platform + North America platform")
-			fmt.Println("[6]: International platform + South America platform")
-			fmt.Println("[7]: International platform + Europe platform")
-			fmt.Println("[8]: International platform + Africa platform")
-			fmt.Println("[9]: International platform + Oceania platform")
-			fmt.Println("[10]: Taiwan platform only")
-			fmt.Println("[11]: Hong Kong platform only")
-			fmt.Println("[12]: Japan platform only")
-			fmt.Println("[13]: Korea platform only")
-			fmt.Println("[14]: North America platform only")
-			fmt.Println("[15]: South America platform only")
-			fmt.Println("[16]: Europe platform only")
-			fmt.Println("[17]: Africa platform only")
-			fmt.Println("[18]: Oceania platform only")
-			fmt.Println("[19]: Sports platform only")
-			fmt.Println("[20]: All platforms")
-			fmt.Print("Please enter corresponding numbers, separated by spaces (press Enter to confirm): ")
-		}
-		r := bufio.NewReader(os.Stdin)
-		l, _, err := r.ReadLine()
-		if err != nil {
-			fmt.Println("Failed to read select option.")
-			return false
-		}
-		for _, c := range strings.Split(string(l), " ") {
-			SwitchOptions(c)
-		}
+		// 默认选择 [0] 跨国平台，无需交互
+		SwitchOptions("0")
 	} else {
 		SwitchOptions(flagString)
 	}
@@ -1031,6 +1043,10 @@ func SetupConcurrency(conc uint64) {
 
 func EnableCache() {
 	cacheEnabled = true
+}
+
+func EnableJSONOutput() {
+	jsonOutput = true
 }
 
 func maskIP(ip string) string {
