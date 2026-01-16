@@ -4,7 +4,7 @@ PKG := ./cmd
 GO ?= go
 GOFLAGS ?=
 
-LDFLAGS ?= -s -w
+GO_LDFLAGS ?= -s -w
 
 .PHONY: all build build-local build-linux-amd64 build-linux-arm64 clean test fmt vet run-json run-json-post
 
@@ -16,10 +16,10 @@ build-local:
 	$(GO) build $(GOFLAGS) -o $(BINARY) $(PKG)
 
 build-linux-amd64:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(GOFLAGS) -trimpath -ldflags "$(LDFLAGS)" -o $(BINARY)_linux_amd64 $(PKG)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(GOFLAGS) -trimpath -ldflags "$(GO_LDFLAGS)" -o $(BINARY)_linux_amd64 $(PKG)
 
 build-linux-arm64:
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build $(GOFLAGS) -trimpath -ldflags "$(LDFLAGS)" -o $(BINARY)_linux_arm64 $(PKG)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build $(GOFLAGS) -trimpath -ldflags "$(GO_LDFLAGS)" -o $(BINARY)_linux_arm64 $(PKG)
 
 test:
 	$(GO) test ./...

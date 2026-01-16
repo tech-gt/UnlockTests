@@ -23,10 +23,25 @@ func Claude(c *http.Client) model.Result {
 	client1 := utils.Req(c)
 	client1 = utils.SetReqHeaders(client1, headers1)
 	resp1, err1 := client1.R().Get(url1)
-	if err1 == nil && resp1 != nil && resp1.StatusCode == 200 {
-		result1, result2, result3 := utils.CheckDNS(hostname)
-		unlockType := utils.GetUnlockType(result1, result2, result3)
-		return model.Result{Name: name, Status: model.StatusYes, UnlockType: unlockType}
+	appUnavailable := false
+	if err1 == nil && resp1 != nil {
+		defer resp1.Body.Close()
+		finalURL := ""
+		if resp1.Request != nil && resp1.Request.URL != nil {
+			finalURL = resp1.Request.URL.String()
+		}
+		b1, readErr1 := io.ReadAll(resp1.Body)
+		if readErr1 == nil {
+			body1 := string(b1)
+			if strings.Contains(finalURL, "app-unavailable-in-region") || strings.Contains(body1, "app-unavailable-in-region") {
+				appUnavailable = true
+			}
+		}
+		if resp1.StatusCode == 200 && !appUnavailable {
+			result1, result2, result3 := utils.CheckDNS(hostname)
+			unlockType := utils.GetUnlockType(result1, result2, result3)
+			return model.Result{Name: name, Status: model.StatusYes, UnlockType: unlockType}
+		}
 	}
 	url2 := "https://claude.ai/cdn-cgi/trace"
 	client2 := utils.Req(c)
@@ -55,6 +70,9 @@ func Claude(c *http.Client) model.Result {
 		return model.Result{Name: name, Status: model.StatusYes, Region: "TOR"}
 	}
 	loc := strings.ToLower(location)
+	if appUnavailable {
+		return model.Result{Name: name, Status: model.StatusNo, Region: loc}
+	}
 	exit := utils.GetRegion(loc, model.ClaudeSupportCountry)
 	if exit {
 		result1, result2, result3 := utils.CheckDNS(hostname)
