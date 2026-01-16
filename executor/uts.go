@@ -795,12 +795,12 @@ func formatJSONResult(netType string) string {
 			if r.Status == model.PrintHead {
 				continue
 			}
-			
+
 			item := ResultItem{
 				Name:   r.Name,
 				Status: r.Status,
 			}
-			
+
 			if r.Region != "" {
 				item.Region = strings.ToUpper(r.Region)
 			}
@@ -810,14 +810,14 @@ func formatJSONResult(netType string) string {
 			if r.UnlockType != "" {
 				item.UnlockType = r.UnlockType
 			}
-			
+
 			results = append(results, item)
 		}
 	}
 
 	output := JSONOutput{
 		IPVersion: strings.ToUpper(netType),
-		Results:    results,
+		Results:   results,
 	}
 
 	jsonBytes, err := json.MarshalIndent(output, "", "  ")
@@ -1092,11 +1092,13 @@ var GlobalIPInfo IPInfo
 
 var globalIpv4InfoRaw json.RawMessage
 
+var globalIpv6IP string
+
 // PostData 结构体用于存储要 POST 的数据
 type PostData struct {
-	IPInfo     IPInfo         `json:"ip_info"`
+	IPInfo      IPInfo          `json:"ip_info"`
 	TestResults []*model.Result `json:"test_results"`
-	Timestamp  string         `json:"timestamp"`
+	Timestamp   string          `json:"timestamp"`
 }
 
 // GetResults 返回当前所有测试结果
@@ -1119,6 +1121,19 @@ func BuildCombinedJSON(ipinfo json.RawMessage, resultsJSON map[string]string) ([
 		resultObjs[k] = json.RawMessage([]byte(vv))
 	}
 
+	mergedIPInfo := ipinfo
+	if globalIpv6IP != "" {
+		ipObj := map[string]any{}
+		if len(ipinfo) > 0 {
+			_ = json.Unmarshal(ipinfo, &ipObj)
+		}
+		ipObj["ipv6"] = globalIpv6IP
+		b, err := json.Marshal(ipObj)
+		if err == nil {
+			mergedIPInfo = json.RawMessage(b)
+		}
+	}
+
 	type payload struct {
 		IPInfo    json.RawMessage            `json:"ip_info"`
 		Results   map[string]json.RawMessage `json:"results"`
@@ -1126,7 +1141,7 @@ func BuildCombinedJSON(ipinfo json.RawMessage, resultsJSON map[string]string) ([
 	}
 
 	postData := payload{
-		IPInfo:    ipinfo,
+		IPInfo:    mergedIPInfo,
 		Results:   resultObjs,
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -1147,34 +1162,34 @@ func PostCombinedJSONToURL(url string, ipinfo json.RawMessage, resultsJSON map[s
 	if err != nil {
 		return err
 	}
-	
+
 	// 创建 HTTP 客户端
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
-	
+
 	// 创建请求
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}
-	
+
 	// 设置请求头
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "UnlockTests/1.0")
-	
+
 	// 发送请求
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// 检查响应状态码
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("server returned status code: %d", resp.StatusCode)
 	}
-	
+
 	return nil
 }
 
@@ -1208,7 +1223,7 @@ func GetIpv4Info(showIP bool) {
 		}
 		return
 	}
-	
+
 	if showIP && GlobalIPInfo.IP != "" {
 		maskedIP := maskIP(GlobalIPInfo.IP)
 		fmt.Println("Your IPV4 address:", Blue(maskedIP))
@@ -1223,6 +1238,7 @@ func GetIpv6Info(showIP bool) {
 	resp, err := client.R().Get("https://www.cloudflare.com/cdn-cgi/trace")
 	if err != nil {
 		IPV6 = false
+		globalIpv6IP = ""
 		if showIP {
 			fmt.Println("Can not detect IPv6 Address")
 		}
@@ -1231,19 +1247,47 @@ func GetIpv6Info(showIP bool) {
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		IPV4 = false
+		IPV6 = false
+		globalIpv6IP = ""
 		if showIP {
 			fmt.Println("Can not detect IPv6 Address")
 		}
 		return
 	}
 	body := string(b)
-	if showIP && body != "" && strings.Contains(body, "ip=") {
-		s := body
-		i := strings.Index(s, "ip=")
-		s = s[i+3:]
-		i = strings.Index(s, "\n")
-		ip := s[:i]
+	if body == "" || !strings.Contains(body, "ip=") {
+		IPV6 = false
+		globalIpv6IP = ""
+		if showIP {
+			fmt.Println("Can not detect IPv6 Address")
+		}
+		return
+	}
+
+	s := body
+	i := strings.Index(s, "ip=")
+	s = s[i+3:]
+	i = strings.Index(s, "\n")
+	if i == -1 {
+		IPV6 = false
+		globalIpv6IP = ""
+		if showIP {
+			fmt.Println("Can not detect IPv6 Address")
+		}
+		return
+	}
+	ip := strings.TrimSpace(s[:i])
+	if ip == "" {
+		IPV6 = false
+		globalIpv6IP = ""
+		if showIP {
+			fmt.Println("Can not detect IPv6 Address")
+		}
+		return
+	}
+
+	globalIpv6IP = ip
+	if showIP {
 		maskedIP := maskIP(ip)
 		fmt.Println("Your IPV6 address:", Blue(maskedIP))
 	}
