@@ -79,6 +79,13 @@ func main() {
 		client = utils.Ipv6HttpClient
 		executor.IPV4 = false
 	}
+
+	ipv4Client := client
+	ipv6Client := client
+	if mode == 0 {
+		ipv4Client = utils.Ipv4HttpClient
+		ipv6Client = utils.Ipv6HttpClient
+	}
 	if jsonOutput {
 		// JSON 模式下，只输出 JSON，不输出其他信息
 		executor.GetIpv4Info(false)
@@ -91,14 +98,14 @@ func main() {
 		var ipv4Results, ipv6Results string
 		resultsMap := map[string]string{}
 		if executor.IPV4 {
-			ipv4Results = executor.RunTests(client, "ipv4", language, useBar)
+			ipv4Results = executor.RunTests(ipv4Client, "ipv4", language, useBar)
 			resultsMap["ipv4"] = ipv4Results
 		}
 		if executor.IPV6 {
 			if mode == 6 {
 				ipv6Results = executor.RunTests(client, "ipv6", language, useBar)
 			} else {
-				ipv6Results = executor.RunTests(utils.Ipv6HttpClient, "ipv6", language, useBar)
+				ipv6Results = executor.RunTests(ipv6Client, "ipv6", language, useBar)
 			}
 			resultsMap["ipv6"] = ipv6Results
 		}
@@ -138,14 +145,14 @@ func main() {
 		}
 		if executor.IPV4 {
 			fmt.Println(Blue("IPV4:"))
-			fmt.Print(executor.RunTests(client, "ipv4", language, useBar))
+			fmt.Print(executor.RunTests(ipv4Client, "ipv4", language, useBar))
 		}
 		if executor.IPV6 {
 			fmt.Println(Blue("IPV6:"))
 			if mode == 6 {
 				fmt.Print(executor.RunTests(client, "ipv6", language, useBar))
 			} else {
-				fmt.Print(executor.RunTests(utils.Ipv6HttpClient, "ipv6", language, useBar))
+				fmt.Print(executor.RunTests(ipv6Client, "ipv6", language, useBar))
 			}
 		}
 	}
