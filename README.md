@@ -224,6 +224,10 @@ PopcornFlix - 已关服
 WorldFlipper - 已关服
 
 KonosubaFD - 已关服
+
+Binge - 被 KayoSports 替代合并了
+
+Jio Cinema - 被 HotStar 替代合并了
 ```
 
 </details>
@@ -231,7 +235,7 @@ KonosubaFD - 已关服
 ## 在Golang中使用
 
 ```
-go get github.com/oneclickvirt/UnlockTests@v0.0.33-20251126065725
+go get github.com/oneclickvirt/UnlockTests@v0.0.35-20260207053956
 ```
 
 ## Thanks

@@ -416,7 +416,7 @@ func HongKong() [](func(c *http.Client) model.Result) {
 	var FuncList = [](func(c *http.Client) model.Result){
 		hk.BilibiliHKMO,
 		hk.MyTvSuper,
-		hk.NowE,
+		// hk.NowE, // 已失效，不做检测，未登录时无法检测是否解锁
 		hk.ViuTV,
 		tw.BahamutAnime,
 		us.HBOMax,
@@ -438,7 +438,6 @@ func Africa() [](func(c *http.Client) model.Result) {
 func India() [](func(c *http.Client) model.Result) {
 	var FuncList = [](func(c *http.Client) model.Result){
 		asia.HotStar,
-		in.JioCinema,
 		in.MXPlayer,
 		in.Zee5,
 		us.NBATV,
@@ -565,7 +564,6 @@ func Oceania() [](func(c *http.Client) model.Result) {
 		utils.PrintAU,
 		au.ABCiView,
 		au.Au7plus,
-		au.Binge,
 		au.Channel10,
 		au.Channel9,
 		au.KayoSports,
