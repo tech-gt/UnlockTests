@@ -291,5 +291,5 @@ var GeminiSupportCountry = []string{
 	"sd", "sr", "sj", "se", "ch", "tw", "tj", "tz", "th", "bs",
 	"gm", "tl", "tg", "tk", "to", "tt", "tn", "tr", "tm", "tc",
 	"tv", "vi", "ug", "ua", "ae", "gb", "us", "um", "uy", "uz",
-	"vu", "va", "ve", "vn", "wf", "eh", "ye", "zm", "zw",
+	"vu", "va", "ve", "vn", "wf", "eh", "ye", "zm", "zw", "hk",
 }
