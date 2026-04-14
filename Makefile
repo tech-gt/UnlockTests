@@ -10,7 +10,7 @@ GO_LDFLAGS ?= -s -w
 
 all: build
 
-build: build-local
+build: build-local build-linux-amd64
 
 build-local:
 	$(GO) build $(GOFLAGS) -o $(BINARY) $(PKG)
